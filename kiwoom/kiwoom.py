@@ -241,21 +241,22 @@ class Kiwoom(QAxWidget):
         if sRQName == "주식일봉차트조회":
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "종목코드")
             code = code.strip()
-            print("%s 일봉데이터 요청" % code)
+
+            if sPrevNext == "0":
+                print("%s 일봉데이터 요청" % code)
 
             cnt = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRQName)
-            print("데이터 일수 : %s 일" % cnt)
 
             ### 한번 조회하면 600일치까지 일봉데이터를 받을 수 있다.
             for i in range(cnt):
                 data = []
-                current_price   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "현재가")
-                value           = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "거래량")
-                trading_value   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "거래대금")
-                date            = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "일자")
-                start_price     = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "시가")
-                high_price      = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "고가")
-                low_price       = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "저가")
+                current_price   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "현재가")
+                value           = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "거래량")
+                trading_value   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "거래대금")
+                date            = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "일자")
+                start_price     = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "시가")
+                high_price      = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "고가")
+                low_price       = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "저가")
 
                 ### GetCommDataEx와 형식을 맞춰주기 위해 앞뒤 데이터에 공백 추가
                 data.append("")
@@ -291,15 +292,16 @@ class Kiwoom(QAxWidget):
 
                     temp = self.calcul_data[:120]
                     print("120일치 데이터 추출 %s" %len(temp))
-                    for value in self.calcul_data[:120]:
-                        total_price += int(value)[1] # current_price
 
-                    print("총 종가 합계 %s" % total_price)
+                    for value in temp:
+                        total_price += value[1]
+
                     moving_average_price = total_price / 120
 
-                    print("오늘자 주가가 120일 이평선에 걸쳐있는지 확인")
+                    print("Try : 오늘자 주가가 120일 이평선에 걸쳐있는지 확인")
                     bottom_stock_price = False
                     check_price = None
+                    print("오늘 시가 : %s | 오늘 종가 : %s | 120 이평선 : %s" % (self.calcul_data[0][7], self.calcul_data[0][6], moving_average_price))
                     if int(self.calcul_data[0][7]) <= moving_average_price and moving_average_price <= int(self.calcul_data[0][6]):
                         print("오늘 주가 120이평선에 걸쳐있는 것 확인")
                         bottom_stock_price = True
@@ -350,7 +352,7 @@ class Kiwoom(QAxWidget):
                     f.close()
 
                 elif pass_success == False:
-                    print("조건부 통과 못참")
+                    print("조건부 통과 못함")
 
                 self.calcul_data.clear()
                 self.calculator_eventloop.exit()
