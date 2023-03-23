@@ -1,4 +1,5 @@
 import os
+import sys
 
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
@@ -77,6 +78,7 @@ class Kiwoom(QAxWidget):
     def event_slots(self):
         self.OnEventConnect.connect(self.login_slot)
         self.OnReceiveTrData.connect(self.trdata_slot)
+        self.OnReceiveMsg.connect(self.msg_slot)
 
     def real_event_slots(self):
         self.OnReceiveRealData.connect(self.realdata_slot)
@@ -527,6 +529,16 @@ class Kiwoom(QAxWidget):
             elif value == '4':
                 print("3시 30분 장 종료")
 
+                for code in self.portfolio_stock_dict.keys():
+                    self.dynamicCall("SetRealRemove(String, String)", self.portfolio_stock_dict[code]['스크린번호'], code)
+
+                QTest.qWait(5000)
+
+                self.file_delete()
+                self.calculator_fnc()
+
+                sys.exit()
+
         elif sRealType == "주식체결":
 
             accepted_time = self.dynamicCall("GetCommRealData(QString, int)", sCode, self.realType.REALTYPE[sRealType]['체결시간']) # HHMMSS
@@ -567,18 +579,18 @@ class Kiwoom(QAxWidget):
             self.portfolio_stock_dict[sCode].update({"시가": start_price})
             self.portfolio_stock_dict[sCode].update({"저가": lowest_price})
 
-            print(self.portfolio_stock_dict[sCode])
+            # print(self.portfolio_stock_dict[sCode])
 
             # 실시간 거래
-            # 계좌잔고평가내역에 있고 오늘 산 잔고에는 없을 경우
+            # [매도] 계좌잔고평가내역에 있고 오늘 산 잔고에는 없을 경우
             if sCode in self.account_stock_dict.keys() and sCode not in self.jango_dict.keys():
-                print("%s %s"% ("신규 매도(1) ", sCode))
+                # print("%s %s"% ("신규 매도(1) ", sCode))
 
                 order_code_inform = self.account_stock_dict[sCode]
 
                 meme_rate = (current_price - order_code_inform['매입가']) / order_code_inform['매입가'] * 100
 
-                if order_code_inform['매매가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
+                if order_code_inform['매입가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
                     order_success = self.dynamicCall("SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
                                      ["신규매도", # 쓰고 싶은 거래 이름
                                      self.portfolio_stock_dict[sCode]['주문용스크린번호'],
@@ -596,7 +608,7 @@ class Kiwoom(QAxWidget):
                         print("매도 주문 전달 실패")
 
 
-            # 오늘 산 잔고에 있을 경우
+            # [매수] 오늘 산 잔고에 있을 경우
             elif sCode in self.jango_dict.keys():
                 print("%s %s" % ("신규 매도(2) ", sCode))
 
@@ -621,9 +633,30 @@ class Kiwoom(QAxWidget):
                     else:
                         print("매도 주문 전달 실패")
 
-            # 등락율이 2.0% 이상이고 오늘 산 잔고에 없는 경우
+            # [매수] 등락율이 2.0% 이상이고 오늘 산 잔고에 없는 경우
             elif up_down_rate > 2.0 and sCode not in self.jango_dict:
-                print("%s %s" % ("신규 매수(1) ", sCode))
+
+                result = (self.use_money * 0.1) / current_price
+                quantity = int(result)
+
+                print("%s [%s] 주문용 스크린번호 [%s] 계좌번호 [%s] 수량 [%s] 가격 [%s] " % ("신규 매수 ", sCode, self.portfolio_stock_dict[sCode]['주문용스크린번호'], self.account_num, quantity, current_price))
+
+                order_success = self.dynamicCall(
+                    "SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                    ["신규매수",  # 쓰고 싶은 거래 이름
+                     self.portfolio_stock_dict[sCode]['주문용스크린번호'],
+                     self.account_num,  # 계좌번호
+                     1,  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                     sCode,
+                     quantity,
+                     current_price,  # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                     self.realType.SENDTYPE['거래구분']['지정가'],
+                     ""])  # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
+
+                if order_success == 0:
+                    print("매수 주문 전달 성공")
+                else:
+                    print("매수 주문 전달 실패")
 
             not_meme_list = list(self.not_account_stock_dict)
 
@@ -633,8 +666,27 @@ class Kiwoom(QAxWidget):
                 not_quantity = self.not_account_stock_dict[order_num]["미체결수량"]
                 order_gubun = self.not_account_stock_dict[order_num]["주문구분"]
 
+                # 매수 취소
                 if order_gubun == "매수" and not_quantity > 0 and priority_short_callvalue > meme_price:
                     print("%s %s" % ("매수 취소(1) ", sCode))
+
+                    if order_gubun == "신규매수" and not_quantity > 0 and current_price > meme_price:
+                        order_success = self.dynamicCall(
+                            "SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                            ["매수취소",  # 쓰고 싶은 거래 이름
+                             self.portfolio_stock_dict[sCode]['주문용스크린번호'],
+                             self.account_num,  # 계좌번호
+                             3,  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                             sCode,
+                             0,
+                             0,  # 주문 가격 : 시장가 & 매수 취소인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                             self.realType.SENDTYPE['거래구분']['지정가'],
+                             order_num])  # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
+
+                    if order_success == 0:
+                        print("매수취소 주문 전달 성공")
+                    else:
+                        print("매수취소 주문 전달 실패")
 
                 elif not_quantity == 0:
                     del self.not_account_stock_dict[order_num]
@@ -748,7 +800,21 @@ class Kiwoom(QAxWidget):
                 self.dynamicCall("SetRealRemove(QString, QString)", self.portfolio_stock_dict[sCode]['스크린번호'], sCode)
 
 
+    def msg_slot(self, sScrNo, sRQName, sTrCode, msg):
+        '''
+        증권사 메시지 송수신
+        :param sScrNo:
+        :param sRQName:
+        :param sTrCode:
+        :param msg:
+        :return:
+        '''
 
+        print("스크린 : %s, 요청이름 : %s, 코드 : %s --- %s" % (sScrNo, sRQName, sTrCode, msg))
 
+    # 파일 삭제
+    def file_delete(self):
+        if os.path.isfile("files/condition_stock.txt"):
+            os.remove("files/condition_stock.txt")
 
 
