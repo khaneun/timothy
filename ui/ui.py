@@ -1,5 +1,4 @@
 from kiwoom.kiwoom import *
-
 import sys
 from PyQt5.QtWidgets import *
 
