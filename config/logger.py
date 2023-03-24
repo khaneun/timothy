@@ -4,7 +4,7 @@ def timothyLogger(name=None):
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
 
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - [%(levelname)s] - %(message)s (%(funcName)s:%(lineno)s)')
 
     # log 출력
     stream_handler = logging.StreamHandler()

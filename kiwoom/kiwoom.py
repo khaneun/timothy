@@ -22,23 +22,31 @@ class Kiwoom(QAxWidget):
         self.real_event_slots()
         ############################
 
+        ### Logger 셍성
+        self.logger = timothyLogger("Kiwoom")
+        ############################
+
         ### Eventloop 모음
         self.login_event_loop       = QEventLoop() # Login 용
         self.transaction_event_loop = QEventLoop() # 키움 API Transaction 처리용
         self.analytics_event_loop   = QEventLoop() # 데이터 분석용
         ############################
 
+        ### Constants
+        self.budget = 0
+        self.lower_excaped_period   = 5
+        self.moving_average_period  = 20
         self.realType = RealType()
+        ############################
 
         ### 변수 모음
         self.account_num = None
         self.calcul_data = []
         self.portfolio_stock_dict = {}
         self.jango_dict = {}
-        self.logger = timothyLogger()
 
         ## 계좌관련 변수
-        self.budget = 0
+
         self.account_stock_dict = {}
         self.not_account_stock_dict = {}
         ############################
@@ -46,6 +54,8 @@ class Kiwoom(QAxWidget):
         ### Request Nickname
         self.request_deposit_received   = "예수금상세현황조회"
         self.request_evaluated_balance  = "계좌평가잔고내역요청"
+        self.request_not_concluded      = "실시간미체결요청"
+        self.inquiry_daily_boxplot      = "주식일봉차트조회"
 
         ### Screen Number 모음
         self.screen_start_stop_real     = "1000"
@@ -55,14 +65,14 @@ class Kiwoom(QAxWidget):
         self.screen_meme_stock          = "6000" # 종목별 할당할 주문용 스크린 번호
         ############################
 
-        print("Kiwoom 클래스입니다.")
+        self.logger.info("자동 매매 프로그램 시작")
 
         self.login()
         self.get_account_info()
         self.detail_account_info()
         self.detail_account_mystock()
         self.not_concluded_account()
-        self.calculator_fnc()
+        #self.calculator_fnc()
 
         self.read_code() # 저장된 종목들 불러오기 (포트폴리오 구성)
         self.screen_number_setting() # 스크린 번호 할당
@@ -86,7 +96,7 @@ class Kiwoom(QAxWidget):
 
     ### Slot만 모아놓은 Function
     def login_slot(self, errCode):
-        self.logger.info(errors(errCode))
+        self.logger.info("로그인 상태 [%s] "%errors(errCode))
         ### login 완료 후, Eventloop 종료
         self.login_event_loop.exit()
     def event_slots(self):
@@ -109,11 +119,10 @@ class Kiwoom(QAxWidget):
     def get_account_info(self):
         account_list = self.dynamicCall("GetLoginInfo(String)", "ACCNO")
         self.account_num = account_list.split(";")[0] # 8044716511 모의계좌번호
-        self.logger.info("1 보유 계좌 번호 %s" % self.account_num)
+        self.logger.info("보유 계좌 번호 %s" % self.account_num)
 
     def detail_account_info(self):
-        print("예수금을 요청하는 부분")
-
+        self.logger.info("%s 요청 [%s]" % (self.request_deposit_received, "opw00001"))
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.account_num)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
@@ -123,10 +132,8 @@ class Kiwoom(QAxWidget):
         ### Eventloop 내 Callback 또는 Queue에 작업이 생성된다.
         self.transaction_event_loop.exec_()
 
-
     def detail_account_mystock(self, sPrevNext="0"):
-        print("계좌평가잔고내역요청")
-
+        self.logger.info("%s 요청 [%s]" % (self.request_evaluated_balance, "opw00018"))
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.account_num)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
@@ -136,11 +143,11 @@ class Kiwoom(QAxWidget):
         self.transaction_event_loop.exec_()
 
     def not_concluded_account(self, sPrevNext="0"):
-        print("미체결 요청")
+        self.logger.info("%s 요청 [%s]" % (self.request_not_concluded, "opt10075"))
         self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_num)
         self.dynamicCall("SetInputValue(QString, QString)", "체결구분", "1")
         self.dynamicCall("SetInputValue(QString, QString)", "매매구분", "0")
-        self.dynamicCall("CommRqData(String, String, int, String)", "실시간미체결요청", "opt10075", sPrevNext, self.screen_Numner)
+        self.dynamicCall("CommRqData(String, String, int, String)", self.request_not_concluded, "opt10075", sPrevNext, self.screen_Numner)
 
     def trdata_slot(self, sScrNo, sRQName, sTrCode, sRecordName, sPrevNext):
         '''
@@ -188,7 +195,7 @@ class Kiwoom(QAxWidget):
                 learn_rate          = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "수익률(%)")
                 current_price       = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "현재가")
                 total_chegual_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매입금액")
-                possible_quantity   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매입가능수량")
+                possible_quantity   = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매매가능수량")
 
                 if code in self.account_stock_dict:
                     pass
@@ -209,18 +216,18 @@ class Kiwoom(QAxWidget):
                 self.account_stock_dict[code].update({"수익률(%)": learn_rate})
                 self.account_stock_dict[code].update({"현재가": current_price})
                 self.account_stock_dict[code].update({"매입금액": total_chegual_price})
-                self.account_stock_dict[code].update({"매입가능수량": possible_quantity})
-
+                self.account_stock_dict[code].update({"매매가능수량": possible_quantity})
                 cnt += 1
-            self.logger.debug()
-            print("[trdata_slot|계좌평가잔고내역요청] 계좌에 가지고 있는 종목 %s" % cnt)
+
+            self.logger.debug("계좌에 가지고 있는 종목 %s" % cnt)
+            self.logger.debug("보유 종목 정보 : %s" % self.account_stock_dict)
 
             if sPrevNext == "2":
                 self.detail_account_mystock(sPrevNext="2")
             else:
                 self.transaction_event_loop.exit()
 
-        elif sRQName == "실시간미체결요청":
+        elif sRQName == self.request_not_concluded:
             rows = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRQName)
             cnt = 0
 
@@ -265,16 +272,16 @@ class Kiwoom(QAxWidget):
                 order_detail.update({"미체결수량": not_quantity})
                 order_detail.update({"체결량": ok_quantity})
 
-                print("[trdata_slot|실시간미체결요청] 미체결 종목 : %s" % self.not_account_stock_dict[order_no])
+                self.logger.info("미체결 종목 : %s" % self.not_account_stock_dict[order_no])
 
                 self.transaction_event_loop.exit()
 
-        if sRQName == "주식일봉차트조회":
+        if sRQName == self.inquiry_daily_boxplot:
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "종목코드")
             code = code.strip()
 
             if sPrevNext == "0":
-                print("[trdata_slot|주식일봉차트조회] %s 일봉데이터 요청" % code)
+                self.logger.debug("%s 일봉데이터 요청" % code)
 
             cnt = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRQName)
 
@@ -309,32 +316,33 @@ class Kiwoom(QAxWidget):
             if sPrevNext == "2":
                 self.day_kiwoom_db(code=code, sPrevNext=sPrevNext)
             else:
-                ### 종목 넘어가기 전에 분석 대상 종목을 선정한다.
-                print("[trdata_slot|주식일봉차트조회] 총 일수 %s" % len(self.calcul_data))
+                # 참고 : https://futurestrade.tistory.com/89
+                self.logger.debug("데이터 분석 : [%s]일 이동평균선 기준 가격 상승의 법칙 (ref. J.E.Granville 8법칙 중 4법칙)" % self.moving_average_period)
+                self.logger.debug("[%s] 금일 기준 총 일봉 데이터 정보 갯수 : %s"%(code, len(self.calcul_data)))
 
                 pass_success = False
 
                 # 120일 이평선을 그릴만큼의 데이터가 있는지 체크
-                if self.calcul_data == None or len(self.calcul_data) < 120:
+                if self.calcul_data == None or len(self.calcul_data) < self.moving_average_period:
                     pass_success = False
                 else:
                     total_price = 0
-                    print("[trdata_slot|주식일봉차트조회] 120일 이동평균값 계산")
-
-                    temp = self.calcul_data[:120]
-                    print("[trdata_slot|주식일봉차트조회] 120일치 데이터 추출 %s" %len(temp))
+                    # print("[trdata_slot|주식일봉차트조회] 120일 이동평균값 계산")
+                    temp = self.calcul_data[:int(self.moving_average_period)]
 
                     for value in temp:
                         total_price += value[1]
 
-                    moving_average_price = total_price / 120
+                    moving_average_price = total_price / int(self.moving_average_period)
 
-                    print("[trdata_slot|주식일봉차트조회]  오늘자 주가가 120일 이평선에 걸쳐있는지 확인")
+                    # print("[trdata_slot|주식일봉차트조회]  오늘자 주가가 120일 이평선에 걸쳐있는지 확인")
                     bottom_stock_price = False
                     check_price = None
-                    print("[trdata_slot|주식일봉차트조회] 오늘 시가 : %s | 오늘 종가 : %s | 120 이평선 : %s" % (self.calcul_data[0][7], self.calcul_data[0][6], moving_average_price))
+
+                    # [6] : 고가 [7] : 저가
+                    # print("[trdata_slot|주식일봉차트조회] 오늘 시가 : %s | 오늘 종가 : %s | 120 이평선 : %s" % (self.calcul_data[0][7], self.calcul_data[0][6], moving_average_price))
                     if int(self.calcul_data[0][7]) <= moving_average_price and moving_average_price <= int(self.calcul_data[0][6]):
-                        print("[trdata_slot|주식일봉차트조회] 오늘 주가 120이평선에 걸쳐있는 것 확인")
+                        # print("[trdata_slot|주식일봉차트조회] 오늘 주가 120이평선에 걸쳐있는 것 확인")
                         bottom_stock_price = True
                         check_price = int(self.calcul_data[0][6])
 
@@ -347,20 +355,22 @@ class Kiwoom(QAxWidget):
 
                         idx = 1
                         while True:
-                            if len(self.calcul_data[idx:]) < 120: # 120일치가 있는지 계속 확인
-                                print("[trdata_slot|주식일봉차트조회] 120일치가 없음!")
+                            if len(self.calcul_data[idx:]) < int(self.moving_average_period): # 120일치가 있는지 계속 확인
+                                self.logger.debug("[%s] [%s]일치 데이터 없음"% (code, int(self.moving_average_period)))
                                 break
-                            total_price = 0
-                            for value in self.calcul_data[idx:120+idx]:
-                                total_price += int(value[1])
-                            moving_average_price_prev = total_price / 120
 
-                            if moving_average_price_prev <= int(self.calcul_data[idx][6]) and idx <= 20:
-                                print("[trdata_slot|주식일봉차트조회] 20일 동안 주가가 120일 이평선과 같거나 위에 있으면 조건 통과 못함")
+                            total_price = 0
+                            for value in self.calcul_data[idx:int(self.moving_average_period)+idx]:
+                                total_price += int(value[1])
+                            moving_average_price_prev = total_price / int(self.moving_average_period)
+
+                            if moving_average_price_prev <= int(self.calcul_data[idx][6]) and idx <= int(self.lower_excaped_period):
+                                # print("[trdata_slot|주식일봉차트조회] 20일 동안 주가가 120일 이평선과 같거나 이평선보다 위에 있으면 조건 통과 못함")
+                                self.logger.info("Granville dead-cross priod : [%s]" % idx)
                                 price_top_moving = False
                                 break
-                            elif int(self.calcul_data[idx][7]) > moving_average_price_prev and idx > 20:
-                                print("[trdata_slot|주식일봉차트조회] 120일 이평선 위에 있는 일봉 확인됨")
+                            elif int(self.calcul_data[idx][7]) > moving_average_price_prev and idx > int(self.lower_excaped_period):
+                                # print("[trdata_slot|주식일봉차트조회] 120일 이평선 위에 있는 일봉 확인됨")
                                 price_top_moving = True
                                 prev_price = int(self.calcul_data[idx][7])
 
@@ -369,21 +379,23 @@ class Kiwoom(QAxWidget):
                         # 해당 부분 이평선이 가장 최근 일자의 이평선 가격보다 낮은지 확인
                         if price_top_moving == True:
                             if moving_average_price > moving_average_price_prev and check_price > prev_price:
-                                print("[trdata_slot|주식일봉차트조회] 포착된 이평선의 가격이 오늘자(최근일자) 이평선 가격보다 낮은 것 확인됨")
-                                print("[trdata_slot|주식일봉차트조회] 포착된 부분의 일봉 저가가 오늘자 고가보다 낮은 것으로 확인됨")
+                                # print("[trdata_slot|주식일봉차트조회] 포착된 이평선의 가격이 오늘자(최근일자) 이평선 가격보다 낮은 것 확인됨")
+                                # print("[trdata_slot|주식일봉차트조회] 포착된 부분의 일봉 저가가 오늘자 고가보다 낮은 것으로 확인됨")
                                 pass_success = True
 
                 if pass_success == True:
-                    print("[trdata_slot|주식일봉차트조회] 조건부 통과됨")
+                    self.logger.info("Granville target detected.")
 
                     code_nm = self.dynamicCall("GetMasterCodeName(QString)", code)
 
                     f = open("files/condition_stock.txt", "a", encoding="utf8")
-                    f.write("%s|$s|%s\n" % (code, code_nm, str(self.calcul_data[0][1])))
+                    msg = "%s;%s;%s\n" % (code, code_nm, self.calcul_data[0][1])
+
+                    f.write(msg)
                     f.close()
 
                 elif pass_success == False:
-                    print("[trdata_slot|주식일봉차트조회] 조건부 통과 못함")
+                    self.logger.debug("Granville target dropped.")
 
                 self.calcul_data.clear()
                 self.analytics_event_loop.exit()
@@ -405,12 +417,12 @@ class Kiwoom(QAxWidget):
         :return:
         '''
         code_list = self.get_code_list_by_market("10")
-        print("[calculator_fnc] 코스닥 갯수 %s" % len(code_list))
+        self.logger.info("코스닥 종목 갯수 : %s" % len(code_list))
 
         ### 각 종목별 분석을 위해 Screen Number(4000)를 끊어서 요청
         for idx, code in enumerate(code_list):
             self.dynamicCall("DisconnectRealData(QString)", self.screen_calculate_Numner)
-            print("[calculator_fnc] %s / %s : KOSDAQ Stock Code : %s is updating..." % (idx+1, len(code_list), code))
+            self.logger.info("[ %s / %s ] : KOSDAQ Stock Code : %s is updating..." % (idx+1, len(code_list), code))
 
             self.day_kiwoom_db(code=code)
 
@@ -425,9 +437,8 @@ class Kiwoom(QAxWidget):
         if date != None:
             self.dynamicCall("SetInputValue(QString, QString)", "기준일자", date)
 
-        self.dynamicCall("CommRqData(QString, QString, int, QString)", "주식일봉차트조회", "opt10081", sPrevNext, self.screen_calculate_Numner)
+        self.dynamicCall("CommRqData(QString, QString, int, QString)", self.inquiry_daily_boxplot, "opt10081", sPrevNext, self.screen_calculate_Numner)
 
-        print("[day_kiwoom_db] 종목코드 [%s]"%code)
         self.analytics_event_loop.exec_()
 
     def read_code(self):
@@ -438,7 +449,7 @@ class Kiwoom(QAxWidget):
             lines = f.readlines()
             for line in lines:
                 if line != "":
-                    ls = line.split("|")
+                    ls = line.split(";")
                     stock_code = ls[0]
                     stock_name = ls[1]
                     stock_price = int(ls[2].split("\n")[0])
@@ -509,23 +520,25 @@ class Kiwoom(QAxWidget):
         :return:
         '''
 
+        self.logger.info("실시간 데이터 조회 시작 [%s] "%sRealType)
+
         if sRealType == "장시작시간":
             fid = self.realType.REALTYPE[sRealType]['장운영구분']
             value = self.dynamicCall("GetCommRealData(QString, int)", sCode, fid)
 
-            print("[realdata_slot|장시작시간] sRealType [%s]"%sRealType)
+
 
             if value == '0':
-                print("[realdata_slot|장시작시간] 장 시작 전")
+                self.logger.info("장 시작 전")
 
             elif value == '3':
-                print("[realdata_slot|장시작시간] 장 시작")
+                self.logger.info("장 시작")
 
             elif value == '2':
-                print("[realdata_slot|장시작시간] 장 종료, 동시호가로 넘어감")
+                self.logger.info("장 종료, 동시호가로 넘어감")
 
             elif value == '4':
-                print("[realdata_slot|장시작시간] 3시 30분 장 종료")
+                self.logger.info("3시 30분 장 종료")
 
                 for code in self.portfolio_stock_dict.keys():
                     self.dynamicCall("SetRealRemove(String, String)", self.portfolio_stock_dict[code]['스크린번호'], code)
@@ -734,7 +747,7 @@ class Kiwoom(QAxWidget):
             if order_number not in self.not_account_stock_dict.keys():
                 self.not_account_stock_dict.update({order_number : {}})
 
-            self.not_account_stock_dict[order_number].update({"종목코드": sCode})
+            self.not_account_stock_dict[order_number].update({"종목코드,업종코드": sCode})
             self.not_account_stock_dict[order_number].update({"종목명": stock_name})
             self.not_account_stock_dict[order_number].update({"원주문번호": order_origin_number})
             self.not_account_stock_dict[order_number].update({"주문번호": order_number})
@@ -757,14 +770,14 @@ class Kiwoom(QAxWidget):
             print("잔고")
 
             account_num = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['계좌번호'])
-            sCode = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['종목코드'])[1:]
+            sCode = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['종목코드,업종코드'])[1:]
             stock_name = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['종목명'])
             current_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['현재가'])
             stock_quan = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['보유수량'])
             like_quan = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['주문가능수량'])
             buy_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['매입단가'])
-            total_buy_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['총매입가'])
-            meme_gubun = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['매도매수구분'])
+            total_buy_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['총매입가(당일누적)'])
+            meme_gubun = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['매도/매수구분'])
             first_sell_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['(최우선)매도호가'])
             first_buy_price = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['(최우선)매수호가'])
 
@@ -782,13 +795,13 @@ class Kiwoom(QAxWidget):
                 self.jango_dict.update({sCode:{}})
 
             self.jango_dict[sCode].update({"현재가":current_price})
-            self.jango_dict[sCode].update({"종목코드": sCode})
+            self.jango_dict[sCode].update({"종목코드,업종코드": sCode})
             self.jango_dict[sCode].update({"종목명": stock_name})
             self.jango_dict[sCode].update({"보유수량": stock_quan})
             self.jango_dict[sCode].update({"주문가능수량": like_quan})
             self.jango_dict[sCode].update({"매입단가": buy_price})
-            self.jango_dict[sCode].update({"총매입가": total_buy_price})
-            self.jango_dict[sCode].update({"매도매수구분": meme_gubun})
+            self.jango_dict[sCode].update({"총매입가(당일누적)": total_buy_price})
+            self.jango_dict[sCode].update({"매도/매수구분": meme_gubun})
             self.jango_dict[sCode].update({"(최우선)매도호가": first_sell_price})
             self.jango_dict[sCode].update({"(최우선)매수호가": first_buy_price})
 
@@ -806,8 +819,7 @@ class Kiwoom(QAxWidget):
         :param msg:
         :return:
         '''
-
-        print("[msg_slot] 스크린번호 : %s, 요청이름 : %s, 코드 : %s --- %s" % (sScrNo, sRQName, sTrCode, msg))
+        self.logger.debug("[msg_slot] 스크린번호 : %s, 요청이름 : %s, 코드 : %s --- %s" % (sScrNo, sRQName, sTrCode, msg))
 
     # 파일 삭제
     def file_delete(self):
