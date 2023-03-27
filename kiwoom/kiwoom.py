@@ -600,7 +600,7 @@ class Kiwoom(QAxWidget):
 
                 meme_rate = (current_price - order_code_inform['매입가']) / order_code_inform['매입가'] * 100
 
-                if order_code_inform['매입가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
+                if order_code_inform['매매가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
                     order_success = self.dynamicCall("SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
                                      ["신규매도", # 쓰고 싶은 거래 이름
                                      self.portfolio_stock_dict[sCode]['주문용스크린번호'],
