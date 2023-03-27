@@ -160,6 +160,8 @@ class Kiwoom(QAxWidget):
         :return:
         '''
 
+        self.logger.info("trdata : %s " % sRQName)
+
         if sRQName == self.request_deposit_received:
             deposit                 = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRQName, 0, "예수금")
             withdrawable_deposit    = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRQName, 0, "출금가능금액")
@@ -262,7 +264,7 @@ class Kiwoom(QAxWidget):
                     
                 order_detail = self.not_account_stock_dict[order_no]
 
-                order_detail.update({"종목코드": code})
+                order_detail.update({"종목코드,업종코드": code})
                 order_detail.update({"종목명": code_nm})
                 order_detail.update({"주문번호": order_no})
                 order_detail.update({"주문상태": order_status})
@@ -509,7 +511,7 @@ class Kiwoom(QAxWidget):
 
             cnt += 1
 
-        print(self.portfolio_stock_dict)
+        # print(self.portfolio_stock_dict)
 
     def realdata_slot(self, sCode, sRealType, sRealData):
         '''
@@ -520,13 +522,11 @@ class Kiwoom(QAxWidget):
         :return:
         '''
 
-        self.logger.info("실시간 데이터 조회 시작 [%s] "%sRealType)
+        self.logger.debug("실시간 데이터 조회 시작 [%s] "%sRealType)
 
         if sRealType == "장시작시간":
             fid = self.realType.REALTYPE[sRealType]['장운영구분']
             value = self.dynamicCall("GetCommRealData(QString, int)", sCode, fid)
-
-
 
             if value == '0':
                 self.logger.info("장 시작 전")
@@ -600,103 +600,105 @@ class Kiwoom(QAxWidget):
 
                 meme_rate = (current_price - order_code_inform['매입가']) / order_code_inform['매입가'] * 100
 
-                if order_code_inform['매입가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
-                    order_success = self.dynamicCall("SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                if order_code_inform['매매가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
+                    order_success = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                                      ["신규매도", # 쓰고 싶은 거래 이름
                                      self.portfolio_stock_dict[sCode]['주문용스크린번호'],
                                      self.account_num, #계좌번호
-                                     2, # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                                     int(2), # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
                                      sCode,
-                                     order_code_inform['매매가능수량'],
-                                     0, # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                                     int(order_code_inform['매매가능수량']),
+                                     int(0), # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
                                      self.realType.SENDTYPE['거래구분']['시장가'],
-                                     '']) # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
+                                     ""]) # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
                     if order_success == 0:
-                        print("매도 주문 전달 성공")
+                        self.logger.info("매도 주문 전달 성공 [%s] : %s 주" % (sCode, order_code_inform['매매가능수량']))
+                        self.logger.info("[DEBUG] 주문용 스크린번호 : %s, 계좌번호 : %s, 거래구분 : %s" % (self.portfolio_stock_dict[sCode]['주문용스크린번호'], self.account_num, self.realType.SENDTYPE['거래구분']['시장가']))
                         del self.account_stock_dict[sCode]
                     else:
-                        print("매도 주문 전달 실패")
+                        self.logger.info("매도 주문 전달 실패")
 
 
             # [매수] 오늘 산 잔고에 있을 경우
             elif sCode in self.jango_dict.keys():
-                print("%s %s" % ("신규 매도(2) ", sCode))
+                # print("%s %s" % ("신규 매도(2) ", sCode))
 
                 jango_dict_item = self.jango_dict[sCode]
                 meme_rate = (current_price - jango_dict_item['매입단가']) / jango_dict_item['매입단가'] * 100
 
                 if jango_dict_item['주문가능수량'] > 0 and (meme_rate > 5 or meme_rate < -5):
                     order_success = self.dynamicCall(
-                                    "SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                                    "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                                     ["신규매도",  # 쓰고 싶은 거래 이름
                                      self.portfolio_stock_dict[sCode]['주문용스크린번호'],
                                      self.account_num,  # 계좌번호
-                                     2,  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                                     int(2),  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
                                      sCode,
-                                     jango_dict_item['주문가능수량'],
-                                     0,  # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                                     int(jango_dict_item['주문가능수량']),
+                                     int(0),  # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
                                      self.realType.SENDTYPE['거래구분']['시장가'],
                                      ''])  # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
 
                     if order_success == 0:
-                        print("매도 주문 전달 성공")
+                        self.logger.info("매도 주문 전달 성공")
                     else:
-                        print("매도 주문 전달 실패")
+                        self.logger.info("매도 주문 전달 실패")
 
             # [매수] 등락율이 2.0% 이상이고 오늘 산 잔고에 없는 경우
             elif up_down_rate > 2.0 and sCode not in self.jango_dict:
+            # elif sCode not in self.jango_dict:
 
                 result = (self.budget * 0.1) / current_price
                 quantity = int(result)
 
-                print("%s [%s] 주문용 스크린번호 [%s] 계좌번호 [%s] 수량 [%s] 가격 [%s] " % ("신규 매수 ", sCode, self.portfolio_stock_dict[sCode]['주문용스크린번호'], self.account_num, quantity, current_price))
+                # self.logger.info("%s [%s] / 주문용 스크린번호 [%s] / 계좌번호 [%s] / 수량 [%s] / 가격 [%s] " % ("신규 매수", sCode, self.portfolio_stock_dict[sCode]['주문용스크린번호'], self.account_num, quantity, current_price))
 
                 order_success = self.dynamicCall(
-                    "SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                    "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                     ["신규매수",  # 쓰고 싶은 거래 이름
                      self.portfolio_stock_dict[sCode]['주문용스크린번호'],
                      self.account_num,  # 계좌번호
-                     1,  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                     int(1),  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
                      sCode,
-                     quantity,
-                     current_price,  # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                     int(quantity),
+                     int(current_price),  # 주문 가격 : 시장가인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
                      self.realType.SENDTYPE['거래구분']['지정가'],
                      ""])  # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
 
                 if order_success == 0:
-                    print("매수 주문 전달 성공")
+                    self.logger.info("매수 주문 전달 성공")
                 else:
-                    print("매수 주문 전달 실패 [%s]" % order_success)
+                    self.logger.info("매수 주문 전달 실패 [%s]" % order_success)
 
             not_meme_list = list(self.not_account_stock_dict)
 
             for order_num in not_meme_list:
-                code = self.not_account_stock_dict[order_num]["종목코드"]
+                code = self.not_account_stock_dict[order_num]["종목코드,업종코드"]
                 meme_price = self.not_account_stock_dict[order_num]["주문가격"]
                 not_quantity = self.not_account_stock_dict[order_num]["미체결수량"]
                 order_gubun = self.not_account_stock_dict[order_num]["주문구분"]
 
                 # 매수 취소
                 if order_gubun == "매수" and not_quantity > 0 and priority_short_callvalue > meme_price:
-                    print("%s %s" % ("매수 취소(1) ", sCode))
+                    #print("%s %s" % ("매수 취소(1) ", sCode))
 
                     if order_gubun == "신규매수" and not_quantity > 0 and current_price > meme_price:
                         order_success = self.dynamicCall(
-                            "SendOrder(QString, QString, QString, QString, int, QString, int, int, QString, QString)",
+                            "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                             ["매수취소",  # 쓰고 싶은 거래 이름
                              self.portfolio_stock_dict[sCode]['주문용스크린번호'],
                              self.account_num,  # 계좌번호
-                             3,  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
-                             sCode,
-                             0,
-                             0,  # 주문 가격 : 시장가 & 매수 취소인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
+                             int(3),  # 주문유형 1:신규매수, 2:신규매도 3:매수취소, 4:매도취소, 5:매수정정, 6:매도정정
+                             code,
+                             int(0),
+                             int(0),  # 주문 가격 : 시장가 & 매수 취소인 경우 시장 가격 정보로 결정되므로 가격 정보 불필요
                              self.realType.SENDTYPE['거래구분']['지정가'],
                              order_num])  # 원주문 번호 : 정정/취소 주문을 하는 경우 본래 요청 번호
 
-                    if order_success == 0:
-                        print("매수취소 주문 전달 성공")
-                    else:
-                        print("매수취소 주문 전달 실패")
+                        if order_success == 0:
+                            self.logger.info("매수취소 주문 전달 성공")
+                        else:
+                            self.logger.info("매수취소 주문 전달 실패")
 
                 elif not_quantity == 0:
                     del self.not_account_stock_dict[order_num]
@@ -763,11 +765,12 @@ class Kiwoom(QAxWidget):
             self.not_account_stock_dict[order_number].update({"(최우선)매도호가)": first_sell_price})
             self.not_account_stock_dict[order_number].update({"(최우선)매수호가": first_buy_price})
 
-            print(self.not_account_stock_dict)
+            # print(self.not_account_stock_dict)
+            self.logger.info("미체결 대기 종목 : %s 건" % len(self.not_account_stock_dict))
 
         # 잔고 변경
         elif int(sGubun) == 1:
-            print("잔고")
+            # print("잔고")
 
             account_num = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['계좌번호'])
             sCode = self.dynamicCall("GetChejanData(int)", self.realType.REALTYPE['잔고']['종목코드,업종코드'])[1:]
@@ -819,7 +822,7 @@ class Kiwoom(QAxWidget):
         :param msg:
         :return:
         '''
-        self.logger.debug("[msg_slot] 스크린번호 : %s, 요청이름 : %s, 코드 : %s --- %s" % (sScrNo, sRQName, sTrCode, msg))
+        self.logger.info("[msg_slot] 스크린번호 : %s, 요청이름 : %s, 코드 : %s --- %s" % (sScrNo, sRQName, sTrCode, msg))
 
     # 파일 삭제
     def file_delete(self):
