@@ -72,7 +72,7 @@ class Kiwoom(QAxWidget):
         self.detail_account_info()
         self.detail_account_mystock()
         self.not_concluded_account()
-        #self.calculator_fnc()
+        # self.calculator_fnc()
 
         self.read_code() # 저장된 종목들 불러오기 (포트폴리오 구성)
         self.screen_number_setting() # 스크린 번호 할당
@@ -86,7 +86,7 @@ class Kiwoom(QAxWidget):
             fids = self.realType.REALTYPE['주식체결']['체결시간']
 
             self.dynamicCall("SetRealReg(QString, QString, QString, QString)", screen_num, code , fids, 1)
-            print("[__init__] 실시간 등록 코드 : %s, 스크린번호 : %s, FID 번호 : %s" % (code, screen_num, fids))
+            self.logger.info("[__init__] 실시간 등록 코드 : %s, 스크린번호 : %s, FID 번호 : %s" % (code, screen_num, fids))
 
 
     def get_ocx_instance(self):
@@ -543,7 +543,7 @@ class Kiwoom(QAxWidget):
                 for code in self.portfolio_stock_dict.keys():
                     self.dynamicCall("SetRealRemove(String, String)", self.portfolio_stock_dict[code]['스크린번호'], code)
 
-                QTest.qWait(5000)
+                # QTest.qWait(5000)
 
                 self.file_delete()
                 self.calculator_fnc()
@@ -650,6 +650,7 @@ class Kiwoom(QAxWidget):
 
                 result = (self.budget * 0.1) / current_price
                 quantity = int(result)
+                self.logger.info("포트폴리오 정보 [%s] : %s" % (sCode, self.portfolio_stock_dict[sCode]))
                 order_success = self.dynamicCall(
                     "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                     ["신규매수",  # 쓰고 싶은 거래 이름
