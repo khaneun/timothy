@@ -430,16 +430,22 @@ class Kiwoom(QAxWidget):
 
     def day_kiwoom_db(self, code=None, date=None, sPrevNext="0"):
 
+        self.logger.info("Start Kiwoom DB")
         ### Eventloop가 멈추지 않고 다음 코드가 실행되기 전에 딜레이를 준다.
         QTest.qWait(3600)
+        self.logger.info("Finish QTest")
 
         self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
         self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
 
         if date != None:
+            self.logger.info("Query data")
             self.dynamicCall("SetInputValue(QString, QString)", "기준일자", date)
+            self.logger.info("Finish Quering data")
 
+        self.logger.info("Get daily data")
         self.dynamicCall("CommRqData(QString, QString, int, QString)", self.inquiry_daily_boxplot, "opt10081", sPrevNext, self.screen_calculate_Numner)
+        self.logger.info("Finish getting daily data")
 
         self.analytics_event_loop.exec_()
 
@@ -548,7 +554,7 @@ class Kiwoom(QAxWidget):
                 self.file_delete()
                 self.calculator_fnc()
 
-                sys.exit()
+                # sys.exit()
 
         elif sRealType == "주식체결":
             accepted_time = self.dynamicCall("GetCommRealData(QString, int)", sCode, self.realType.REALTYPE[sRealType]['체결시간']) # HHMMSS
